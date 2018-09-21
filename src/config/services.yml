@@ -1,0 +1,45 @@
+services:
+  # default configuration for services in *this* file
+  _defaults:
+    # automatically injects dependencies in your services
+    autowire: true
+    # automatically registers your services as commands, event subscribers, etc.
+    autoconfigure: true
+    # this means you cannot fetch services directly from the container via $container->get()
+    # if you need to
+    public: false
+
+  ### BASE FRAMEWORK SERVICES REGISTRATION ###
+  App\:
+    resource: '../app/*'
+    exclude: '../app/{Event,Script,Traits}'
+
+  App\Controller\:
+    resource: '../app/Controller/*'
+    public: true
+    tags:
+    - controller.service_arguments
+
+  parameter_bag:
+    class: Symfony\Component\DependencyInjection\ParameterBag\ContainerBag
+    public: true
+    arguments:
+    - '@service_container'
+
+  monolog:
+    class: Monolog\Logger
+    arguments:
+    - 'file_stream'
+
+  Symfony\Component\Routing\RequestContext: ~
+  Core\Controller\ControllerResolver:
+    public: true
+
+  Symfony\Component\HttpKernel\Controller\ArgumentResolver:
+    public: true
+
+  Symfony\Component\Routing\Matcher\UrlMatcher:
+    arguments: ['%routes%', '@Symfony\Component\Routing\RequestContext']
+    public: true
+
+  ### END ###
