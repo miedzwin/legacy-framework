@@ -16,7 +16,8 @@
         "symfony/http-kernel": "^4.1",
         "symfony/dependency-injection": "^4.1",
         "symfony/framework-bundle": "^4.1",
-        "symfony/yaml": "^4.1"
+        "symfony/yaml": "^4.1",
+        "monolog/monolog": "^1.23"
     },
     "autoload": {
         "psr-4": {

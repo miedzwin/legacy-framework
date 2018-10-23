@@ -2,26 +2,14 @@
 
 namespace Core;
 
-use Core\Controller\ControllerResolver;
 use Core\Exception\APIException;
-use Symfony\Component\Config\FileLocator;
-use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
-use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Controller\ArgumentResolver;
 use Symfony\Component\HttpKernel\Controller\ArgumentResolverInterface;
 use Symfony\Component\HttpKernel\Controller\ControllerResolverInterface;
-use Symfony\Component\HttpKernel\Event\FilterControllerArgumentsEvent;
-use Symfony\Component\HttpKernel\Event\FilterControllerEvent;
-use Symfony\Component\HttpKernel\EventListener\ResponseListener;
-use Symfony\Component\HttpKernel\EventListener\RouterListener;
 use Symfony\Component\HttpKernel\HttpKernel;
-use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Routing\Exception\ResourceNotFoundException;
-use Symfony\Component\Routing\Matcher\UrlMatcher;
 use Symfony\Component\Routing\Matcher\UrlMatcherInterface;
 
 class Framework extends HttpKernel
@@ -61,23 +49,16 @@ class Framework extends HttpKernel
      * @param string $environment
      * @throws \Exception
      */
-    public function __construct(string $environment)
+    public function __construct($container, string $environment = '')
     {
-        $this->buildContainer($environment);
+        $this->container = $container;
 
-        $this->matcher = $this->container->get(UrlMatcher::class);
-        $this->controllerResolver = $this->container->get(ControllerResolver::class);
-        $this->argumentResolver = $this->container->get(ArgumentResolver::class);
+        $this->matcher = $this->container->get('url_matcher');
+        $this->controllerResolver = $this->container->get('controller_resolver');
+        $this->argumentResolver = $this->container->get('argument_resolver');
         $this->environment = $environment;
 
-        $dispatcher = new EventDispatcher();
-        $requestStack = new RequestStack();
-        $dispatcher->addSubscriber(new RouterListener($this->matcher, $requestStack));
-        $dispatcher->addSubscriber(new ResponseListener('UTF-8'));
-
         $this->initApp();
-
-        parent::__construct($dispatcher, $this->controllerResolver, $requestStack, $this->argumentResolver);
     }
 
     /**
@@ -101,19 +82,12 @@ class Framework extends HttpKernel
 
         try {
             $request->attributes->add($this->matcher->match($request->getPathInfo()));
+
             $controller = $this->controllerResolver->getController($request);
-
-            $event = new FilterControllerEvent($this, $controller, $request, $type);
-            $this->dispatcher->dispatch(KernelEvents::CONTROLLER, $event);
-            $controller = $event->getController();
-
-            // controller arguments
+            $controller[0]->setContainer($this->container);
             $arguments = $this->argumentResolver->getArguments($request, $controller);
 
-            $event = new FilterControllerArgumentsEvent($this, $controller, $arguments, $request, $type);
-            $this->dispatcher->dispatch(KernelEvents::CONTROLLER_ARGUMENTS, $event);
-
-            return call_user_func_array($event->getController(), $event->getArguments());
+            return call_user_func_array($controller, $arguments);
         } catch (ResourceNotFoundException $ex) {
             return new Response('Not Found.', Response::HTTP_NOT_FOUND);
         } catch (APIException $ex) {
@@ -123,7 +97,6 @@ class Framework extends HttpKernel
                 'errorMessage' => $ex->getMessage(),
             ]);
         } catch (\Exception $ex) {
-            echo $ex->getMessage();
             return new Response('An error occured.', Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -141,43 +114,6 @@ class Framework extends HttpKernel
     }
 
     /**
-     * Initialize DI container
-     */
-    private function buildContainer(string $environment): void
-    {
-        $container = new Container();
-        $container->setParameter('routes', (new Router())->getRouteCollection());
-        $this->container = $container;
-
-        $this->loadParameters();
-        $this->loadServices();
-        $this->container->compile();
-        $this->initEnvironmentVars();
-    }
-
-    /**
-     * Load parameters from file
-     */
-    private function loadParameters(): void
-    {
-
-    }
-
-    /**
-     * Loading services with configuration from file
-     */
-    private function loadServices(): void
-    {
-        $yamlLoader = new YamlFileLoader($this->container, new FileLocator(__DIR__ . '/../config'));
-        try {
-            $yamlLoader->load('config.yml');
-        } catch (\Exception $e) {
-            echo $e->getMessage();
-            die('An error occurred while registering services.');
-        }
-    }
-
-    /**
      * Get root directory of the project
      *
      * @return string
@@ -190,16 +126,6 @@ class Framework extends HttpKernel
         }
 
         return $this->rootDir;
-    }
-
-    /**
-     * Load environment variables from file and init them
-     *
-     * @throws \Exception
-     */
-    private function initEnvironmentVars()
-    {
-
     }
 
     /**

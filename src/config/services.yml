@@ -10,36 +10,48 @@ services:
     public: false
 
   ### BASE FRAMEWORK SERVICES REGISTRATION ###
-  App\:
-    resource: '../app/*'
-    exclude: '../app/{Event,Script,Traits}'
+  Symfony\Component\Routing\RequestContext: ~
 
-  App\Controller\:
-    resource: '../app/Controller/*'
+  url_matcher:
+    class: Symfony\Component\Routing\Matcher\UrlMatcher
     public: true
-    tags:
-    - controller.service_arguments
-
-  parameter_bag:
-    class: Symfony\Component\DependencyInjection\ParameterBag\ContainerBag
-    public: true
-    arguments:
-    - '@service_container'
+    arguments: ['%routes%', '@Symfony\Component\Routing\RequestContext']
 
   monolog:
     class: Monolog\Logger
     arguments:
     - 'file_stream'
 
-  Symfony\Component\Routing\RequestContext: ~
-  Core\Controller\ControllerResolver:
+  controller_resolver:
+    class: Core\Controller\ControllerResolver
     public: true
+    arguments:
+    - '@monolog'
+    - '@service_container'
 
-  Symfony\Component\HttpKernel\Controller\ArgumentResolver:
+  argument_resolver:
+    class: Symfony\Component\HttpKernel\Controller\ArgumentResolver
     public: true
+    tags:
+    - {name: 'argument_resolver'}
 
-  Symfony\Component\Routing\Matcher\UrlMatcher:
-    arguments: ['%routes%', '@Symfony\Component\Routing\RequestContext']
+  framework:
+    class: Core\Framework
     public: true
+    arguments:
+    - '@service_container'
 
   ### END ###
+
+  ### Register here place where you want to work ###
+  App\:
+    resource: '../app/*'
+    tags:
+      - { name: argument_resolver.service }
+
+  ### Register controllers as a services for passing services to constructor
+  App\Controller\:
+    resource: '../app/Controller/*'
+    public: true
+    tags:
+      - controller.service_arguments
